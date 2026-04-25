@@ -52,6 +52,7 @@ export function Dashboard() {
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [formValues, setFormValues] = useState<InterfaceFormValues>(emptyForm);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -132,9 +133,13 @@ export function Dashboard() {
     return () => window.clearInterval(timer);
   }, [interfaces, simulatedStatuses]);
 
-  async function loadDashboard(nextSelectedId?: string) {
+  async function loadDashboard(nextSelectedId?: string, silent = false) {
     try {
-      setLoading(true);
+      if (silent) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       const data = await fetchDashboard();
       setDashboard(data);
       setSelectedId((current) => nextSelectedId ?? current ?? data.interfaces[0]?.id ?? "");
@@ -142,8 +147,53 @@ export function Dashboard() {
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "데이터를 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
+      if (silent) {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
     }
+  }
+
+  function replaceInterfaceInDashboard(nextItem: InterfaceItem) {
+    setDashboard((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const nextInterfaces = current.interfaces.map((item) =>
+        item.id === nextItem.id ? nextItem : item,
+      );
+
+      const failed = nextInterfaces.filter((item) => item.status === "FAILED").length;
+      const warning = nextInterfaces.filter((item) => item.status === "WARNING").length;
+      const running = nextInterfaces.filter((item) => item.status === "RUNNING").length;
+      const healthy = nextInterfaces.filter((item) => item.status === "HEALTHY").length;
+      const totalTransactions = nextInterfaces.reduce((sum, item) => sum + item.todayCount, 0);
+      const avgLatency =
+        nextInterfaces.length > 0
+          ? nextInterfaces.reduce((sum, item) => sum + item.avgLatencyMs, 0) / nextInterfaces.length
+          : 0;
+      const avgSlaRate =
+        nextInterfaces.length > 0
+          ? nextInterfaces.reduce((sum, item) => sum + item.slaPercent, 0) / nextInterfaces.length
+          : 0;
+
+      return {
+        ...current,
+        interfaces: nextInterfaces,
+        summary: {
+          totalInterfaces: nextInterfaces.length,
+          failed,
+          warning,
+          running,
+          healthy,
+          totalTransactions,
+          avgLatency,
+          avgSlaRate,
+        },
+      };
+    });
   }
 
   async function handleSubmit() {
@@ -153,11 +203,12 @@ export function Dashboard() {
         const created = await createManagedInterface(formValues);
         setFeedback(`${created.id} 인터페이스가 등록되었습니다.`);
         setFormValues(emptyForm);
-        await loadDashboard(created.id);
+        await loadDashboard(created.id, true);
       } else if (selectedInterface) {
         const updated = await updateManagedInterface(selectedInterface.id, formValues);
+        replaceInterfaceInDashboard(updated);
         setFeedback(`${updated.id} 설정이 저장되었습니다.`);
-        await loadDashboard(updated.id);
+        await loadDashboard(updated.id, true);
       }
       setError(null);
     } catch (submitError) {
@@ -171,13 +222,14 @@ export function Dashboard() {
     try {
       setSubmitting(true);
       const retried = await retryManagedInterface(id);
+      replaceInterfaceInDashboard(retried);
       setSimulatedStatuses((current) => {
         const next = { ...current };
         delete next[id];
         return next;
       });
       setFeedback(`${retried.id} 재처리 완료`);
-      await loadDashboard(retried.id);
+      await loadDashboard(retried.id, true);
       setError(null);
     } catch (retryError) {
       setError(retryError instanceof Error ? retryError.message : "재처리 중 오류가 발생했습니다.");
@@ -198,7 +250,7 @@ export function Dashboard() {
       setFeedback(`${id} 인터페이스 삭제 완료`);
       setFormMode("create");
       setFormValues(emptyForm);
-      await loadDashboard();
+      await loadDashboard(undefined, true);
       setError(null);
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "삭제 중 오류가 발생했습니다.");
@@ -329,6 +381,11 @@ export function Dashboard() {
         <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
           <Panel title="인터페이스 현황" subtitle="운영 인터페이스 목록">
             <div className="overflow-hidden rounded-[22px] border border-slate-200">
+              {refreshing ? (
+                <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium text-slate-500">
+                  목록을 최신 상태로 반영하는 중입니다.
+                </div>
+              ) : null}
               <div className="hidden grid-cols-[1.15fr_0.95fr_0.75fr_0.7fr_0.7fr_0.85fr] gap-4 bg-slate-100 px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 lg:grid">
                 <span className="self-center">인터페이스</span>
                 <span className="self-center">대상기관</span>
