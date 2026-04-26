@@ -1,0 +1,29 @@
+# IntelliJ
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/coverage/
+frontend/build/
+frontend/.pnpm-debug.log*
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.env*
+!frontend/.env.local.example
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+
+# Backend
+backend/**/build/
+backend/**/.gradle/
+
+# Logs
+*.log

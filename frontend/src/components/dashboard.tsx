@@ -104,11 +104,12 @@ export function Dashboard() {
     }
 
     const timer = window.setInterval(() => {
-      const candidates = interfaces.filter(
-        (item) =>
-          !simulatedStatuses[item.id] &&
-          (item.status === "HEALTHY" || item.status === "WARNING"),
-      );
+      const candidates = interfaces
+        .map((item) => ({
+          ...item,
+          status: simulatedStatuses[item.id] ?? item.status,
+        }))
+        .filter((item) => item.status === "HEALTHY" || item.status === "WARNING");
 
       if (candidates.length === 0) {
         return;
@@ -381,6 +382,9 @@ export function Dashboard() {
         <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
           <Panel title="인터페이스 현황" subtitle="운영 인터페이스 목록">
             <div className="overflow-hidden rounded-[22px] border border-slate-200">
+              <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-800">
+                안내: 운영 인터페이스 상태는 10초마다 임의로 변경되도록 설정되어 있습니다.
+              </div>
               {refreshing ? (
                 <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium text-slate-500">
                   목록을 최신 상태로 반영하는 중입니다.
